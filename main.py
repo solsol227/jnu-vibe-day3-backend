@@ -14,7 +14,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query
@@ -151,6 +151,40 @@ def air_predict(station: str):
     if not hist:
         raise HTTPException(404, f"'{station}' 측정소 데이터가 없습니다")
     return {"station": station, **predict.predict_next(hist)}
+
+
+@app.get("/db/status")
+def db_status():
+    """DB에 지금까지 얼마나 쌓였는지"""
+    st = store.stats(SOURCE)
+    return {"store": store.kind, "mode": SOURCE, "rows": st["rows"],
+            "first": st["first"] and db.kst(st["first"]),
+            "last": st["last"] and db.kst(st["last"])}
+
+
+@app.get("/air/history")
+def air_history(station: str, hours: int = Query(48, ge=1, le=168)):
+    """측정소의 시간대별 기록 (오래된 순)"""
+    hist = store.history(SOURCE, station, limit=hours)
+    return [{"time": db.kst(h["data_time"]), "pm10": h["pm10"], "pm25": h["pm25"]} for h in hist]
+
+
+@app.get("/air/compare")
+def air_compare(station: str):
+    """가장 최근 값 vs 어제 같은 시간 값"""
+    hist = store.history(SOURCE, station, limit=72)
+    if not hist:
+        raise HTTPException(404, f"'{station}' 측정소 데이터가 없습니다")
+    last = hist[-1]
+    t = datetime.fromisoformat(last["data_time"])
+    yest = next((h for h in hist
+                 if abs((datetime.fromisoformat(h["data_time"]) - (t - timedelta(days=1))).total_seconds()) < 1800),
+                None)
+    diff = (last["pm10"] - yest["pm10"]) if yest and last["pm10"] is not None and yest["pm10"] is not None else None
+    return {"station": station,
+            "now": {"time": db.kst(last["data_time"]), "pm10": last["pm10"]},
+            "yesterday": yest and {"time": db.kst(yest["data_time"]), "pm10": yest["pm10"]},
+            "diff_pm10": diff}
 
 
 @app.get("/logs")

@@ -43,6 +43,14 @@ class SupabaseStore:
                .order("data_time", desc=True).limit(limit).execute())
         return list(reversed(res.data))
 
+    def stats(self, source):
+        t = self.sb.table("jnu_vc3_air_readings")
+        total = t.select("id", count="exact").eq("source", source).limit(1).execute().count or 0
+        first = t.select("data_time").eq("source", source).order("data_time").limit(1).execute().data
+        last = t.select("data_time").eq("source", source).order("data_time", desc=True).limit(1).execute().data
+        return {"rows": total, "first": first[0]["data_time"] if first else None,
+                "last": last[0]["data_time"] if last else None}
+
     def logs(self, limit=20):
         res = (self.sb.table("jnu_vc3_collect_logs").select("*")
                .order("ran_at", desc=True).limit(limit).execute())
@@ -71,6 +79,10 @@ class MemoryStore:
     def history(self, source, station, limit=72):
         rs = [r for r in self.rows.values() if r["source"] == source and r["station"] == station]
         return sorted(rs, key=lambda r: r["data_time"])[-limit:]
+
+    def stats(self, source):
+        ts = sorted(r["data_time"] for r in self.rows.values() if r["source"] == source)
+        return {"rows": len(ts), "first": ts[0] if ts else None, "last": ts[-1] if ts else None}
 
     def logs(self, limit=20):
         return list(reversed(self._logs))[:limit]
