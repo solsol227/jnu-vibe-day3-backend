@@ -25,6 +25,7 @@ load_dotenv()  # 로컬에선 .env 읽기, Railway에선 Variables가 이미 들
 import collect  # noqa: E402
 import db  # noqa: E402
 import predict  # noqa: E402
+import stations  # noqa: E402  (측정소 위치표)
 
 log = logging.getLogger("uvicorn.error")
 
@@ -123,9 +124,15 @@ def _latest_rows():
 def air_latest():
     rows = _latest_rows()
     rows.sort(key=lambda r: r["pm10"] or 0, reverse=True)
-    return [{"station": r["station"], "time": db.kst(r["data_time"]),
-             "pm10": r["pm10"], "pm10_grade": r["pm10_grade"],
-             "pm25": r["pm25"], "pm25_grade": r["pm25_grade"]} for r in rows]
+    result = []
+    for r in rows:
+        pos = stations.coord(r["station"])  # (위도, 경도) 또는 None
+        result.append({"station": r["station"], "time": db.kst(r["data_time"]),
+                       "pm10": r["pm10"], "pm10_grade": r["pm10_grade"],
+                       "pm25": r["pm25"], "pm25_grade": r["pm25_grade"],
+                       "lat": pos[0] if pos else None,   # 좌표가 없으면 null
+                       "lng": pos[1] if pos else None})
+    return result
 
 
 @app.get("/air/summary")
