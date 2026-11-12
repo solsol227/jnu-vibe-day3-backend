@@ -76,7 +76,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="제주 미세먼지 백엔드", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=FRONT_ORIGINS,
+# Vercel은 배포마다 jnu-vibe-day3-frontend-xxxx-...vercel.app 같은 개별 주소도 만들므로 함께 허용
+FRONT_ORIGIN_REGEX = os.getenv("FRONT_ORIGIN_REGEX", r"https://jnu-vibe-day3-frontend[a-z0-9-]*\.vercel\.app")
+app.add_middleware(CORSMiddleware, allow_origins=FRONT_ORIGINS, allow_origin_regex=FRONT_ORIGIN_REGEX,
                    allow_methods=["*"], allow_headers=["*"])
 
 
